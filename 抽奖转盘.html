@@ -1,0 +1,784 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>抽奖转盘</title>
+<style>
+  * { box-sizing: border-box; }
+  :root{
+    --bg:#0f1225;
+    --panel:#1a1e3a;
+    --panel-2:#232848;
+    --line:#343a66;
+    --text:#e9ecff;
+    --muted:#98a1cc;
+    --accent:#ffd93d;
+    --font: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  html,body{ height:100%; }
+  body{
+    margin:0; padding:28px 20px;
+    font-family: var(--font);
+    background: radial-gradient(1200px 800px at 50% -10%, #262d5c 0%, var(--bg) 55%) fixed;
+    color:var(--text);
+    display:flex; align-items:center; justify-content:center;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .app{
+    display:grid;
+    grid-template-columns: minmax(300px, 560px) 380px;
+    gap:36px;
+    align-items:start;
+    width:100%;
+    max-width:1020px;
+  }
+
+  /* ============ 转盘 ============ */
+  .wheel-box{
+    position:relative;
+    width:100%;
+    max-width:560px;
+    aspect-ratio:1/1;
+    margin:0 auto;
+  }
+  #wheel{
+    width:100%; height:auto;
+    display:block;
+    border-radius:50%;
+    box-shadow: 0 24px 60px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.06);
+  }
+  .pointer{
+    position:absolute; top:0; left:50%;
+    transform:translateX(-50%);
+    width:0; height:0;
+    border-left:  clamp(9px, 2vw, 16px) solid transparent;
+    border-right: clamp(9px, 2vw, 16px) solid transparent;
+    border-top:   clamp(20px, 4vw, 36px) solid #ffffff;
+    filter: drop-shadow(0 3px 6px rgba(0,0,0,.5));
+    z-index:5;
+    pointer-events:none;
+  }
+
+  .spin-btn{
+    position:absolute; top:50%; left:50%;
+    transform:translate(-50%,-50%);
+    width:23%; aspect-ratio:1/1;
+    border-radius:50%;
+    border:4px solid #fff;
+    background: linear-gradient(160deg,#ff7a45,#ff3d68);
+    color:#fff;
+    font-family:var(--font);
+    font-size: clamp(12px, 2.6vw, 19px);
+    font-weight:800;
+    letter-spacing:1px;
+    cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+    padding:0;
+    z-index:6;
+    user-select:none;
+    box-shadow: 0 8px 26px rgba(255,61,104,.45), inset 0 -4px 10px rgba(0,0,0,.22);
+    transition: transform .15s ease, box-shadow .2s ease, filter .2s ease;
+  }
+  .spin-btn:hover:not(:disabled){ transform:translate(-50%,-50%) scale(1.07); }
+  .spin-btn:active:not(:disabled){ transform:translate(-50%,-50%) scale(.95); }
+  .spin-btn:disabled{
+    cursor:not-allowed;
+    filter:grayscale(.45) brightness(.85);
+    transform:translate(-50%,-50%);
+    box-shadow: 0 4px 14px rgba(0,0,0,.4);
+  }
+
+  /* ============ 侧栏 ============ */
+  .panel{
+    background: linear-gradient(180deg, rgba(35,40,72,.95), rgba(22,26,48,.95));
+    border:1px solid rgba(255,255,255,.08);
+    border-radius:20px;
+    padding:22px;
+    box-shadow: 0 20px 50px rgba(0,0,0,.4);
+    max-height: calc(100vh - 56px);
+    overflow-y:auto;
+  }
+  .panel::-webkit-scrollbar{ width:6px; }
+  .panel::-webkit-scrollbar-thumb{ background:#3a4174; border-radius:3px; }
+
+  .panel h1{
+    font-size:19px; margin:0 0 18px;
+    letter-spacing:1px;
+    display:flex; align-items:center; gap:8px;
+  }
+  .section{ margin-bottom:22px; }
+  .section h2{
+    font-size:13px; font-weight:600;
+    color:var(--muted);
+    margin:0 0 10px;
+    letter-spacing:1.5px;
+    text-transform:uppercase;
+  }
+  .sec-head{
+    display:flex; align-items:center; justify-content:space-between;
+    margin-bottom:10px;
+  }
+  .sec-head h2{ margin:0; }
+
+  .mini{
+    font-family:var(--font);
+    font-size:12px;
+    padding:5px 11px;
+    border-radius:8px;
+    border:1px solid transparent;
+    background: linear-gradient(160deg,#4a56b8,#3b3f8f);
+    color:#fff;
+    cursor:pointer;
+    transition:.15s;
+  }
+  .mini:hover{ filter:brightness(1.18); }
+  .mini.ghost{
+    background:transparent;
+    border-color: var(--line);
+    color: var(--muted);
+  }
+  .mini.ghost:hover{ color:#fff; border-color:#5b64a8; filter:none; }
+
+  /* 奖品列表 */
+  .list{ display:flex; flex-direction:column; gap:8px; }
+  .item{
+    display:flex; align-items:center; gap:8px;
+    background: rgba(255,255,255,.04);
+    border:1px solid rgba(255,255,255,.06);
+    border-radius:10px;
+    padding:6px 8px;
+    transition: border-color .15s;
+  }
+  .item:focus-within{ border-color:#5a63b8; }
+  .dot{
+    width:12px; height:12px; border-radius:50%;
+    flex:0 0 auto;
+    box-shadow: 0 0 0 2px rgba(255,255,255,.12);
+  }
+  .item input{
+    font-family:var(--font);
+    background:transparent;
+    border:none;
+    color:var(--text);
+    font-size:13px;
+    padding:4px 2px;
+    outline:none;
+    min-width:0;
+  }
+  .item input.name{ flex:1 1 auto; }
+  .item input.weight{
+    flex:0 0 58px;
+    width:58px;
+    text-align:center;
+    background: rgba(255,255,255,.06);
+    border-radius:6px;
+    color:var(--accent);
+    font-weight:700;
+  }
+  .item input.weight::-webkit-outer-spin-button,
+  .item input.weight::-webkit-inner-spin-button{ -webkit-appearance:none; margin:0; }
+  .item input.weight{ -moz-appearance:textfield; }
+  .del{
+    flex:0 0 auto;
+    width:24px; height:24px;
+    border-radius:6px;
+    border:none;
+    background:rgba(255,90,120,.14);
+    color:#ff8199;
+    cursor:pointer;
+    font-size:12px;
+    line-height:1;
+    transition:.15s;
+  }
+  .del:hover{ background:rgba(255,90,120,.3); color:#fff; }
+
+  .hint{
+    font-size:11.5px;
+    color:#6d76a6;
+    margin:10px 0 0;
+    line-height:1.5;
+  }
+
+  /* 参数行 */
+  .row{
+    display:flex; align-items:center; gap:10px;
+    font-size:13px;
+    padding:7px 0;
+    color:#c7cdf0;
+  }
+  .row > span:first-child{ flex:0 0 62px; color:var(--muted); }
+  .row b{
+    flex:0 0 46px;
+    text-align:right;
+    color:var(--accent);
+    font-size:12.5px;
+  }
+  input[type=range]{
+    -webkit-appearance:none;
+    flex:1 1 auto;
+    height:4px;
+    border-radius:2px;
+    background: linear-gradient(90deg,#4a56b8,#7b5cff);
+    outline:none;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;
+    width:16px; height:16px;
+    border-radius:50%;
+    background:#fff;
+    border:3px solid #6b5cff;
+    cursor:pointer;
+    box-shadow:0 2px 6px rgba(0,0,0,.4);
+  }
+  input[type=range]::-moz-range-thumb{
+    width:12px; height:12px; border-radius:50%;
+    background:#fff; border:3px solid #6b5cff; cursor:pointer;
+  }
+  .row.check{
+    gap:9px;
+    cursor:pointer;
+    align-items:flex-start;
+  }
+  .row.check input{
+    width:16px; height:16px;
+    accent-color:#6b5cff;
+    margin-top:1px;
+    flex:0 0 auto;
+    cursor:pointer;
+  }
+  .row.check span{ color:#c7cdf0; font-size:12.5px; line-height:1.4; }
+
+  /* 记录 */
+  .history{
+    list-style:none; margin:0; padding:0;
+    display:flex; flex-direction:column; gap:6px;
+    max-height:190px; overflow-y:auto;
+  }
+  .history::-webkit-scrollbar{ width:6px; }
+  .history::-webkit-scrollbar-thumb{ background:#3a4174; border-radius:3px; }
+  .history:empty::after{
+    content:'暂无记录';
+    color:#5d6693; font-size:12.5px;
+  }
+  .history li{
+    display:flex; align-items:center; justify-content:space-between;
+    gap:10px;
+    font-size:12.5px;
+    padding:7px 10px;
+    background:rgba(255,255,255,.04);
+    border-radius:8px;
+    animation: slideIn .25s ease;
+  }
+  @keyframes slideIn{
+    from{ opacity:0; transform:translateY(-5px); }
+    to{ opacity:1; transform:none; }
+  }
+  .h-name{ color:#fff; font-weight:600; }
+  .h-time{ color:#69719e; font-size:11px; flex:0 0 auto; }
+
+  /* ============ 结果弹窗 ============ */
+  .modal{
+    position:fixed; inset:0;
+    background:rgba(6,8,20,.75);
+    backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(5px);
+    display:flex; align-items:center; justify-content:center;
+    padding:20px;
+    opacity:0; pointer-events:none;
+    transition: opacity .25s ease;
+    z-index:100;
+  }
+  .modal.show{ opacity:1; pointer-events:auto; }
+  .modal-card{
+    background: linear-gradient(165deg,#2a3160,#151933);
+    border:1px solid rgba(255,255,255,.14);
+    border-radius:22px;
+    padding:30px 40px 26px;
+    text-align:center;
+    min-width:270px;
+    box-shadow: 0 30px 70px rgba(0,0,0,.6);
+    transform: scale(.82) translateY(10px);
+    transition: transform .32s cubic-bezier(.2,1.5,.45,1);
+  }
+  .modal.show .modal-card{ transform:scale(1) translateY(0); }
+  .modal-emoji{ font-size:40px; line-height:1; margin-bottom:10px; }
+  .modal-card p{
+    margin:0 0 6px;
+    font-size:12.5px;
+    letter-spacing:3px;
+    color:var(--muted);
+  }
+  .modal-card h3{
+    margin:0 0 22px;
+    font-size:28px;
+    font-weight:800;
+    background: linear-gradient(90deg,#ffe27a,#ffb347,#ff7a45);
+    -webkit-background-clip:text;
+    background-clip:text;
+    color:transparent;
+    word-break:break-word;
+  }
+  .modal-card button{
+    font-family:var(--font);
+    font-size:14px;
+    font-weight:700;
+    padding:10px 32px;
+    border-radius:999px;
+    border:none;
+    cursor:pointer;
+    color:#fff;
+    background: linear-gradient(160deg,#ff7a45,#ff3d68);
+    box-shadow:0 8px 22px rgba(255,61,104,.4);
+    transition:.15s;
+  }
+  .modal-card button:hover{ filter:brightness(1.1); }
+  .modal-card button:active{ transform:scale(.96); }
+
+  @media (max-width: 940px){
+    body{ align-items:flex-start; padding:20px 14px 40px; }
+    .app{ grid-template-columns:1fr; max-width:560px; gap:26px; }
+    .panel{ max-height:none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <!-- 转盘区 -->
+  <div class="wheel-box">
+    <canvas id="wheel"></canvas>
+    <div class="pointer"></div>
+    <button id="spinBtn" class="spin-btn">开始抽奖</button>
+  </div>
+
+  <!-- 控制面板 -->
+  <aside class="panel">
+    <h1>🎡 抽奖转盘</h1>
+
+    <div class="section">
+      <div class="sec-head">
+        <h2>奖品设置</h2>
+        <div>
+          <button id="addBtn" class="mini">＋ 添加</button>
+          <button id="defaultBtn" class="mini ghost">恢复默认</button>
+        </div>
+      </div>
+      <div class="list" id="list"></div>
+      <p class="hint">权重越大中奖概率越高；权重设为 0 则该奖项不会被抽中。</p>
+    </div>
+
+    <div class="section">
+      <h2>参数设置</h2>
+      <label class="row">
+        <span>转动时长</span>
+        <input type="range" id="duration" min="2" max="10" step="0.5" value="5">
+        <b id="durationVal">5s</b>
+      </label>
+      <label class="row">
+        <span>最少圈数</span>
+        <input type="range" id="turns" min="3" max="15" step="1" value="6">
+        <b id="turnsVal">6圈</b>
+      </label>
+      <label class="row check">
+        <input type="checkbox" id="removeWin">
+        <span>中奖后移除该奖项（不重复中奖）</span>
+      </label>
+    </div>
+
+    <div class="section" style="margin-bottom:0">
+      <div class="sec-head">
+        <h2>中奖记录</h2>
+        <button id="clearHistory" class="mini ghost">清空</button>
+      </div>
+      <ul class="history" id="history"></ul>
+    </div>
+  </aside>
+</div>
+
+<!-- 结果弹窗 -->
+<div class="modal" id="modal">
+  <div class="modal-card">
+    <div class="modal-emoji">🎉</div>
+    <p>恭 喜 中 奖</p>
+    <h3 id="resultName">一等奖</h3>
+    <button id="modalClose">知道了</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  'use strict';
+
+  /* ================= 基础 ================= */
+  const SIZE = 560;                       // 画布逻辑尺寸
+  const FONT = 'system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif';
+  const TWO_PI = Math.PI * 2;
+
+  const canvas     = document.getElementById('wheel');
+  const ctx        = canvas.getContext('2d');
+  const listEl     = document.getElementById('list');
+  const spinBtn    = document.getElementById('spinBtn');
+  const addBtn     = document.getElementById('addBtn');
+  const defaultBtn = document.getElementById('defaultBtn');
+  const durationEl = document.getElementById('duration');
+  const durationVal= document.getElementById('durationVal');
+  const turnsEl    = document.getElementById('turns');
+  const turnsVal   = document.getElementById('turnsVal');
+  const removeWinEl= document.getElementById('removeWin');
+  const historyEl  = document.getElementById('history');
+  const clearHisBtn= document.getElementById('clearHistory');
+  const modal      = document.getElementById('modal');
+  const resultName = document.getElementById('resultName');
+  const modalClose = document.getElementById('modalClose');
+
+  /* ================= 数据 ================= */
+  const DEFAULT_PRIZES = [
+    { name: '一等奖',   weight: 1  },
+    { name: '二等奖',   weight: 3  },
+    { name: '三等奖',   weight: 6  },
+    { name: '幸运奖',   weight: 4  },
+    { name: '再来一次', weight: 8  },
+    { name: '谢谢参与', weight: 12 }
+  ];
+
+  let prizes   = DEFAULT_PRIZES.map(p => ({ ...p }));
+  let rotation = 0;        // 当前旋转角（弧度）
+  let spinning = false;    // 是否正在转动
+
+  /* ================= 工具 ================= */
+  function colorFor(i, n){
+    const hue = (i * 360 / Math.max(n, 1) + 10) % 360;
+    return 'hsl(' + hue.toFixed(0) + ', 70%, 52%)';
+  }
+
+  function escapeHtml(str){
+    return String(str).replace(/[&<>"']/g, c => ({
+      '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'
+    }[c]));
+  }
+
+  /* ================= 画布 ================= */
+  function resizeCanvas(){
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width  = SIZE * dpr;
+    canvas.height = SIZE * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    draw(rotation);
+  }
+
+  function draw(rot){
+    const cx = SIZE / 2, cy = SIZE / 2, R = SIZE / 2 - 16;
+    ctx.clearRect(0, 0, SIZE, SIZE);
+
+    /* --- 外圈金色环 --- */
+    const ringGrad = ctx.createLinearGradient(0, 0, SIZE, SIZE);
+    ringGrad.addColorStop(0,   '#ffe27a');
+    ringGrad.addColorStop(0.5, '#ffb347');
+    ringGrad.addColorStop(1,   '#ff7a45');
+    ctx.beginPath();
+    ctx.arc(cx, cy, R + 12, 0, TWO_PI);
+    ctx.fillStyle = ringGrad;
+    ctx.fill();
+
+    /* --- 内层深色底 --- */
+    ctx.beginPath();
+    ctx.arc(cx, cy, R + 3, 0, TWO_PI);
+    ctx.fillStyle = '#151936';
+    ctx.fill();
+
+    const n = prizes.length;
+
+    /* --- 空状态 --- */
+    if (n === 0){
+      ctx.beginPath();
+      ctx.arc(cx, cy, R, 0, TWO_PI);
+      ctx.fillStyle = '#252b4d';
+      ctx.fill();
+      ctx.fillStyle = '#98a1cc';
+      ctx.font = '600 22px ' + FONT;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('请先添加奖品', cx, cy);
+      return;
+    }
+
+    const seg = TWO_PI / n;
+
+    /* --- 扇区 --- */
+    for (let i = 0; i < n; i++){
+      const start = rot + i * seg;
+      const end   = start + seg;
+
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.arc(cx, cy, R, start, end);
+      ctx.closePath();
+      ctx.fillStyle = colorFor(i, n);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,.28)';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      /* 文字（沿半径方向，朝外） */
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(start + seg / 2);
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#fff';
+      ctx.shadowColor = 'rgba(0,0,0,.35)';
+      ctx.shadowBlur = 4;
+      ctx.shadowOffsetY = 1;
+
+      const maxW = R - 52;
+      let fs = Math.min(24, Math.max(11, 200 / n + 6));
+      let text = String(prizes[i].name || '未命名');
+      ctx.font = '700 ' + fs + 'px ' + FONT;
+
+      while (fs > 10 && ctx.measureText(text).width > maxW){
+        fs -= 1;
+        ctx.font = '700 ' + fs + 'px ' + FONT;
+      }
+      if (ctx.measureText(text).width > maxW){
+        while (text.length > 1 && ctx.measureText(text + '…').width > maxW){
+          text = text.slice(0, -1);
+        }
+        text += '…';
+      }
+      ctx.fillText(text, R - 26, 0);
+      ctx.restore();
+    }
+
+    /* --- 中心白盘（衬托按钮） --- */
+    ctx.beginPath();
+    ctx.arc(cx, cy, R * 0.20 + 14, 0, TWO_PI);
+    ctx.fillStyle = 'rgba(255,255,255,.96)';
+    ctx.fill();
+  }
+
+  /* ================= 奖品列表渲染 ================= */
+  function renderList(){
+    listEl.innerHTML = '';
+    const n = prizes.length;
+
+    prizes.forEach((p, i) => {
+      const row = document.createElement('div');
+      row.className = 'item';
+
+      const dot = document.createElement('span');
+      dot.className = 'dot';
+      dot.style.background = colorFor(i, n);
+
+      const nameInput = document.createElement('input');
+      nameInput.className = 'name';
+      nameInput.type = 'text';
+      nameInput.value = p.name;
+      nameInput.placeholder = '奖项名称';
+      nameInput.maxLength = 30;
+      nameInput.addEventListener('input', () => {
+        prizes[i].name = nameInput.value;
+        if (!spinning) draw(rotation);
+      });
+
+      const wInput = document.createElement('input');
+      wInput.className = 'weight';
+      wInput.type = 'number';
+      wInput.min = '0';
+      wInput.step = '1';
+      wInput.value = p.weight;
+      wInput.title = '权重（中奖概率）';
+      wInput.addEventListener('input', () => {
+        let v = Number(wInput.value);
+        if (!isFinite(v) || v < 0) v = 0;
+        prizes[i].weight = v;
+      });
+      wInput.addEventListener('blur', () => {
+        wInput.value = prizes[i].weight;
+      });
+
+      const del = document.createElement('button');
+      del.className = 'del';
+      del.textContent = '✕';
+      del.title = '删除';
+      del.addEventListener('click', () => {
+        if (spinning) return;
+        prizes.splice(i, 1);
+        renderList();
+        draw(rotation);
+      });
+
+      row.append(dot, nameInput, wInput, del);
+      listEl.appendChild(row);
+    });
+  }
+
+  /* ================= 抽取逻辑 ================= */
+  function pickIndex(){
+    const weights = prizes.map(p => Math.max(0, Number(p.weight) || 0));
+    const total = weights.reduce((a, b) => a + b, 0);
+    if (total <= 0) return Math.floor(Math.random() * prizes.length);
+
+    let r = Math.random() * total;
+    for (let i = 0; i < weights.length; i++){
+      r -= weights[i];
+      if (r < 0) return i;
+    }
+    return weights.length - 1;
+  }
+
+  /* ================= 转动 ================= */
+  function spin(){
+    if (spinning) return;
+
+    if (prizes.length === 0){
+      alert('请先添加至少一个奖项！');
+      return;
+    }
+    const totalW = prizes.reduce((s, p) => s + Math.max(0, Number(p.weight) || 0), 0);
+    if (totalW <= 0){
+      alert('所有奖项权重都是 0，请至少给一个奖项设置大于 0 的权重。');
+      return;
+    }
+
+    spinning = true;
+    spinBtn.disabled = true;
+
+    const idx = pickIndex();
+    const n = prizes.length;
+    const seg = TWO_PI / n;
+
+    /* 计算让第 idx 个扇区停在顶部指针处的旋转角 */
+    const jitter = (Math.random() - 0.5) * seg * 0.62;   // 落点随机偏移，避免每次都正中
+    let target = -Math.PI / 2 - (idx * seg + seg / 2) - jitter;
+    target = ((target % TWO_PI) + TWO_PI) % TWO_PI;
+
+    const cur = ((rotation % TWO_PI) + TWO_PI) % TWO_PI;
+    let delta = target - cur;
+    if (delta < 0) delta += TWO_PI;
+
+    const minTurns = Number(turnsEl.value) || 6;
+    const extraTurns = minTurns + Math.floor(Math.random() * 3);
+    const totalDelta = delta + extraTurns * TWO_PI;
+
+    const duration = (Number(durationEl.value) || 5) * 1000;
+    const startRot = rotation;
+    const t0 = performance.now();
+
+    function frame(now){
+      const t = Math.min((now - t0) / duration, 1);
+      const eased = 1 - Math.pow(1 - t, 4);          // easeOutQuart
+      rotation = startRot + totalDelta * eased;
+      draw(rotation);
+
+      if (t < 1){
+        requestAnimationFrame(frame);
+      } else {
+        rotation = startRot + totalDelta;            // 精确落位
+        draw(rotation);
+        spinning = false;
+        spinBtn.disabled = false;
+        finish(idx);
+      }
+    }
+    requestAnimationFrame(frame);
+  }
+
+  /* ================= 结束处理 ================= */
+  function finish(idx){
+    const prize = prizes[idx];
+    const name = prize ? (prize.name || '未命名') : '未知';
+
+    addHistory(name);
+    showModal(name);
+
+    if (removeWinEl.checked && prizes.length > 1){
+      prizes.splice(idx, 1);
+      renderList();
+      draw(rotation);
+    }
+  }
+
+  function showModal(name){
+    resultName.textContent = name;
+    modal.classList.add('show');
+  }
+
+  function hideModal(){
+    modal.classList.remove('show');
+  }
+
+  function addHistory(name){
+    const li = document.createElement('li');
+
+    const s1 = document.createElement('span');
+    s1.className = 'h-name';
+    s1.textContent = name;
+
+    const s2 = document.createElement('span');
+    s2.className = 'h-time';
+    const d = new Date();
+    s2.textContent = [d.getHours(), d.getMinutes(), d.getSeconds()]
+      .map(v => String(v).padStart(2, '0')).join(':');
+
+    li.append(s1, s2);
+    historyEl.prepend(li);
+
+    while (historyEl.children.length > 30){
+      historyEl.lastElementChild.remove();
+    }
+  }
+
+  /* ================= 事件绑定 ================= */
+  spinBtn.addEventListener('click', spin);
+
+  addBtn.addEventListener('click', () => {
+    if (spinning) return;
+    prizes.push({ name: '奖项' + (prizes.length + 1), weight: 1 });
+    renderList();
+    draw(rotation);
+    const rows = listEl.querySelectorAll('.item .name');
+    if (rows.length) rows[rows.length - 1].focus();
+  });
+
+  defaultBtn.addEventListener('click', () => {
+    if (spinning) return;
+    if (!confirm('确定要恢复默认奖品吗？')) return;
+    prizes = DEFAULT_PRIZES.map(p => ({ ...p }));
+    renderList();
+    draw(rotation);
+  });
+
+  durationEl.addEventListener('input', () => {
+    durationVal.textContent = durationEl.value + 's';
+  });
+
+  turnsEl.addEventListener('input', () => {
+    turnsVal.textContent = turnsEl.value + '圈';
+  });
+
+  clearHisBtn.addEventListener('click', () => {
+    historyEl.innerHTML = '';
+  });
+
+  modalClose.addEventListener('click', hideModal);
+  modal.addEventListener('click', e => {
+    if (e.target === modal) hideModal();
+  });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') hideModal();
+  });
+
+  window.addEventListener('resize', resizeCanvas);
+
+  /* ================= 初始化 ================= */
+  resizeCanvas();
+  renderList();
+  durationVal.textContent = durationEl.value + 's';
+  turnsVal.textContent = turnsEl.value + '圈';
+
+})();
+</script>
+</body>
+</html>
